@@ -2,6 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../Context/AuthContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://agri-backend-9vtz.onrender.com/api';
+
+// ── Moved outside component so it's stable and doesn't trigger exhaustive-deps ──
+const DAY_LABELS = ['Day 7','Day 6','Day 5','Day 4','Day 3','Day 2','Today'];
+
 const injectStyles = () => {
   if (document.getElementById('scd-styles')) return;
   const s = document.createElement('style');
@@ -302,7 +306,6 @@ const SmartCropDashboard = () => {
       } else if (v instanceof Date) {
         out[k] = v.toISOString();
       } else if (v && typeof v === 'object' && !Array.isArray(v) && v.seconds !== undefined) {
-        // Firestore Timestamp-like
         out[k] = new Date(v.seconds * 1000).toISOString();
       } else {
         out[k] = v;
@@ -321,7 +324,7 @@ const SmartCropDashboard = () => {
         setHistory(cleaned);
 
         const acts = [];
-        cleaned.slice(0,5).forEach((r, i) => {
+        cleaned.slice(0,5).forEach((r) => {
           const ts = ago(r.timestamp || r.created_at);
           if (r.predictions?.irrigation?.action !== 'no_irrigation')
             acts.push({ icon:'💧', text:`Irrigation ${r.predictions?.irrigation?.action?.replace(/_/g,' ')} — ${r.crop_type}`, time:ts, color:'#3b82f6' });
@@ -361,7 +364,6 @@ const SmartCropDashboard = () => {
     if (!soil_moisture||!temperature||!humidity) return toast('Soil moisture, temperature and humidity are required','error');
     setAnalyzing(true); setResults(null);
 
-    // Immediately create a live snapshot so overview updates right away
     const snap = {
       soil_moisture: parseFloat(soil_moisture),
       temperature:   parseFloat(temperature),
@@ -389,11 +391,9 @@ const SmartCropDashboard = () => {
         r.irrigation = sensorRes.predictions?.irrigation;
         r.pest = sensorRes.predictions?.pest_risk;
 
-        // Update live snapshot with predictions so overview gauges reflect reality
         snap.predictions = { irrigation: r.irrigation, pest_risk: r.pest };
         setLiveSnap(snap);
 
-        // Refresh history in background
         loadHistory();
       } else {
         toast(sensorRes.error||'Sensor analysis failed','error');
@@ -432,13 +432,11 @@ const SmartCropDashboard = () => {
     toast('Form cleared','info');
   };
 
-  /* ── Chart data helpers ── */
-  const DAY_LABELS = ['Day 7','Day 6','Day 5','Day 4','Day 3','Day 2','Today'];
-
+  /* ── Chart data helpers ──
+     DAY_LABELS is defined at module level (outside component) to keep it stable */
   const mkChart = useCallback((key) => {
     const src = history.length ? [...history].slice(-7) : [];
     if (!src.length) {
-      // show live snap in "Today" slot if available
       if (liveSnap && liveSnap[key] != null) {
         return DAY_LABELS.map((l, i) => ({ l, v: i === 6 ? Number(liveSnap[key]) : 0 }));
       }
